@@ -1,0 +1,9 @@
+services:
+  app:
+    build: .
+    container_name: rails_app
+    ports:
+      - "3000:3000"
+    stdin_open: true
+    tty: true
+    command: bash   # <-- starts bash instead of Rails
