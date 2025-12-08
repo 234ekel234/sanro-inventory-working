@@ -2,9 +2,8 @@
 # All this logic will automatically be available in application.js.
 # You can use CoffeeScript in this file: http://coffeescript.org/
 
-# Helper function to perform precise multiplication for currency (REVISED).
-# It relies on multiplying the raw product by 100, rounding to the nearest integer (cent),
-# and then dividing back by 100. This is the standard solution for JS floating point math.
+# Helper function to perform precise multiplication for currency.
+# This prevents JavaScript floating point errors (e.g., 0.1 * 3 = 0.30000000000000004).
 calculatePreciseTotal = (qty, unit_price) ->
   # Convert inputs to numbers first, handle potential nulls/empties with 0
   qty = parseFloat(qty) || 0
@@ -14,7 +13,6 @@ calculatePreciseTotal = (qty, unit_price) ->
   raw_product = qty * unit_price
   
   # 2. Convert the raw product to cents and round it to the nearest integer (cent).
-  # This corrects the floating point error.
   total_cents = Math.round(raw_product * 100)
 
   # 3. Return the value as a string formatted to two decimal places
@@ -80,10 +78,74 @@ ready = ->
 
   ### receipt form elements start ###
   if (window.location.pathname.match(/.*receipt.*(new|edit).*/))
+    
+    # 🚨 URGENT FIX FOR DECIMAL INPUT 🚨
+    # Issue: Input type="number" aggressively cleans up trailing decimals (e.g., '10.' becomes '10') on blur.
+    # Solution: The input field type for quantity and price MUST be changed from 'number' to 'text' in the HTML/Rails view template.
+    # The CoffeeScript parseFloat() function will handle the text to float conversion correctly.
+    console.warn("If you cannot type a trailing decimal (e.g., '10.'), you MUST change the input type for quantity and price fields from 'number' to 'text' in your view templates (e.g., receipt_details_fields.html.erb).")
+    
+    # Function to clean and enforce decimal-only input (digits and a single decimal point)
+    enforceDecimalInput = (e) ->
+      # Get the current value
+      current_value = $(this).val()
+      
+      # 1. Strip all non-numeric and non-dot/non-comma characters
+      # Replace non-digit/non-dot/non-comma characters with nothing
+      cleaned_value = current_value.replace(/[^0-9\.\,]/g, '')
+      
+      # 2. Replace comma with dot (standardizing decimal separator)
+      cleaned_value = cleaned_value.replace(',', '.')
+      
+      # 3. Ensure only one decimal point exists
+      first_dot_index = cleaned_value.indexOf('.')
+      if first_dot_index != -1
+        # Everything before the first dot + the first dot + everything after the first dot (excluding subsequent dots)
+        cleaned_value = cleaned_value.substring(0, first_dot_index + 1) + cleaned_value.substring(first_dot_index + 1).replace(/\./g, '')
+
+      # Update the input value only if it changed
+      if current_value != cleaned_value
+        $(this).val(cleaned_value)
+      
+      return
+    
+    # Apply the input restriction to all current qty and price inputs
+    $('.new_receipt .nested-fields div.qty input, .new_receipt .nested-fields div.price input').on('input', enforceDecimalInput)
+    
     ### datepicker - add/update receipt form ###
     $('.receipt_date_issued').datepicker(
       dateFormat: "dd/mm/yy"
     )
+    
+    # CENTRALIZED FUNCTION: Calculates the sum of all row totals and updates the main receipt total.
+    recalculateReceiptTotal = () ->
+      # Select ALL input fields that hold the line item totals
+      $row_totals = $('.new_receipt .nested-fields div.total input')
+      
+      total_amount_cents = 0
+      
+      $row_totals.each ->
+        # Get the value from the total input (which is already fixed to 2 decimals as a string)
+        row_total_value = this.value
+        # Convert to cents and add to the running total
+        total_amount_cents += Math.round(parseFloat(row_total_value) * 100)
+        return
+
+      # Convert the final total cents back to a decimal string
+      final_total = (total_amount_cents / 100).toFixed(2)
+      
+      # Set the main receipt total value
+      $('.new_receipt div.receipt-total input').val(final_total)
+      
+      console.log "--- Receipt Total Calculation (REFINED) ---"
+      console.log "Total Cents Sum:", total_amount_cents
+      console.log "Final Receipt Total:", final_total
+      console.log "-----------------------------------------"
+      
+      # Trigger balance calculation immediately after total updates
+      $('.new_receipt div.receipt-amount-received input').trigger('focusout')
+      return
+
 
     # Function to calculate and update a single receipt detail row total
     updateRowTotal = ($row) ->
@@ -102,13 +164,14 @@ ready = ->
       console.log "---------------------------"
 
       # Trigger overall receipt total update
-      $('.new_receipt div.receipt-total input').trigger('change')
+      recalculateReceiptTotal()
       return
 
     ### cocoon nested forms ###
     $('.new_receipt').on('cocoon:before-insert', (e, detail) ->
       ### calculate receipt_detail total ###
       $qty_input = $(detail.find('div.qty input'))
+      $qty_input.on('input', enforceDecimalInput) # Apply input filtering
       $qty_input.on('focusin', ->
         tag_input = $($(detail).find('input.hidden-item-id')).val()
         $.ajax({
@@ -125,6 +188,7 @@ ready = ->
       )
 
       $unit_price_input = $(detail.find('div.price input'))
+      $unit_price_input.on('input', enforceDecimalInput) # Apply input filtering
       $unit_price_input.on('focusout', ->
         $row = $(this).parents().closest('tr')
         updateRowTotal($row) # Call the central update function
@@ -188,7 +252,8 @@ ready = ->
               success: (result) ->
                 # Update price input and trigger recalculation
                 $row = tag_input.parents().closest('tr')
-                $row.find('div.price input').val(result.unit_price).trigger('focusout') # Trigger the updateRowTotal
+                $row.find('div.price input').val(result.unit_price) # Don't trigger focusout here to avoid double-calculation
+                updateRowTotal($row)
                 $(detail.find('span.unit-price')).text(result.unit_price)
             })
 
@@ -198,7 +263,7 @@ ready = ->
       return
     )
 
-    # Note: These change events now call the central updateRowTotal function
+    # Note: These change/focusout events now call the central updateRowTotal function
     $('.new_receipt .nested-fields div.qty input').on('change', (e, detail) ->
       $row = $(this).parents().closest('tr')
       updateRowTotal($row)
@@ -212,34 +277,12 @@ ready = ->
     )
 
 
-    ### calculate receipt total - REVISED for precision ###
-    $('.new_receipt div.receipt-total input').on('change', ->
-      receipt_details = $('.new_receipt .receipt-detail table')
-      len = receipt_details.length
-      index = 0
-      # Accumulate total in CENTS to maintain precision
-      total_amount_cents = 0
-
-      while index < len
-        # Get the value from the total input (which is already fixed to 2 decimals as a string)
-        row_total_value = $(receipt_details[index]).find('div.total input')[0].value
-        # Convert to cents and add to the running total
-        total_amount_cents += Math.round(parseFloat(row_total_value) * 100)
-        ++index
-
-      # Convert the final total cents back to a decimal string
-      this.value = (total_amount_cents / 100).toFixed(2)
-      
-      console.log "--- Receipt Total Calculation ---"
-      console.log "Total Cents Sum:", total_amount_cents
-      console.log "Final Receipt Total:", this.value
-      console.log "-------------------------------"
-      
-      $('.new_receipt div.receipt-amount-received input').trigger('focusout')
-      return
-    )
+    ### calculate receipt total - Now just calls the centralized function ###
+    # We trigger the recalculation when the total input changes (which is driven by updateRowTotal)
+    $('.new_receipt div.receipt-total input').on('change', recalculateReceiptTotal)
 
     ### calculate balance - REVISED for precision ###
+    # This also recalculates the total first if triggered by focusout
     $('.new_receipt div.receipt-amount-received input').on('focusout', ->
       balance = $('.new_receipt div.receipt-balance input')[0]
       total = $('.new_receipt div.receipt-total input')[0].value # String value of Total
@@ -305,9 +348,12 @@ ready = ->
       return
 
   $('.new_receipt').on('cocoon:before-remove', (e, detail) ->
+    # Set the total of the row being removed to zero BEFORE recalculating the main total
     $total_input = $(detail.find('div.total input'))
     $total_input.val(0)
-    $('.new_receipt div.receipt-total input').trigger('change')
+    
+    # Recalculate the receipt total immediately
+    recalculateReceiptTotal()
     return
   )
   ### receipt form elements end ###
@@ -349,8 +395,8 @@ ready = ->
     $('input#merge:checked').each( (index)->
       items.push(this.value)
     )
-    console.log('TODO ' + items)
-    window.location = "/items/merging?items=" + items
+    console.log('TODO ' + items);
+    window.location = "/items/merging?items=" + items;
   )
   ### merge item end ###
 
