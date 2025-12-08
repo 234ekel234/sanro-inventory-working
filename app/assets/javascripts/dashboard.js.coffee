@@ -31,6 +31,38 @@ calculatePreciseDifference = (total, received) ->
   return (difference_cents / 100).toFixed(2)
 
 
+# Function to clean and enforce decimal-only input (digits and a single decimal point)
+# NOW INCLUDES LIMITING TO TWO DECIMAL PLACES.
+enforceDecimalInput = (e) ->
+  # Get the current value
+  current_value = $(this).val()
+  
+  # 1. Strip all non-numeric and non-dot/non-comma characters
+  cleaned_value = current_value.replace(/[^0-9\.\,]/g, '')
+  
+  # 2. Replace comma with dot (standardizing decimal separator)
+  cleaned_value = cleaned_value.replace(',', '.')
+  
+  # 3. Ensure only one decimal point exists
+  first_dot_index = cleaned_value.indexOf('.')
+  if first_dot_index != -1
+    # Everything before the first dot + the first dot + everything after the first dot (excluding subsequent dots)
+    cleaned_value = cleaned_value.substring(0, first_dot_index + 1) + cleaned_value.substring(first_dot_index + 1).replace(/\./g, '')
+
+    # 4. 🛑 NEW LOGIC: Limit to exactly two decimal places 🛑
+    decimal_part = cleaned_value.substring(first_dot_index + 1)
+    if decimal_part.length > 2
+      # Truncate the string to include the whole number part, the dot, and exactly two digits after the dot.
+      # first_dot_index + 3 gives us the position right after the second decimal digit.
+      cleaned_value = cleaned_value.substring(0, first_dot_index + 3) 
+
+  # Update the input value only if it changed
+  if current_value != cleaned_value
+    $(this).val(cleaned_value)
+  
+  return
+
+
 ready = ->
   if !$.fn.dataTable.isDataTable( ".inventory" )
     if $('.inventory').length > 0
@@ -79,36 +111,6 @@ ready = ->
   ### receipt form elements start ###
   if (window.location.pathname.match(/.*receipt.*(new|edit).*/))
     
-    # 🚨 URGENT FIX FOR DECIMAL INPUT 🚨
-    # Issue: Input type="number" aggressively cleans up trailing decimals (e.g., '10.' becomes '10') on blur.
-    # Solution: The input field type for quantity and price MUST be changed from 'number' to 'text' in the HTML/Rails view template.
-    # The CoffeeScript parseFloat() function will handle the text to float conversion correctly.
-    console.warn("If you cannot type a trailing decimal (e.g., '10.'), you MUST change the input type for quantity and price fields from 'number' to 'text' in your view templates (e.g., receipt_details_fields.html.erb).")
-    
-    # Function to clean and enforce decimal-only input (digits and a single decimal point)
-    enforceDecimalInput = (e) ->
-      # Get the current value
-      current_value = $(this).val()
-      
-      # 1. Strip all non-numeric and non-dot/non-comma characters
-      # Replace non-digit/non-dot/non-comma characters with nothing
-      cleaned_value = current_value.replace(/[^0-9\.\,]/g, '')
-      
-      # 2. Replace comma with dot (standardizing decimal separator)
-      cleaned_value = cleaned_value.replace(',', '.')
-      
-      # 3. Ensure only one decimal point exists
-      first_dot_index = cleaned_value.indexOf('.')
-      if first_dot_index != -1
-        # Everything before the first dot + the first dot + everything after the first dot (excluding subsequent dots)
-        cleaned_value = cleaned_value.substring(0, first_dot_index + 1) + cleaned_value.substring(first_dot_index + 1).replace(/\./g, '')
-
-      # Update the input value only if it changed
-      if current_value != cleaned_value
-        $(this).val(cleaned_value)
-      
-      return
-    
     # Apply the input restriction to all current qty and price inputs
     $('.new_receipt .nested-fields div.qty input, .new_receipt .nested-fields div.price input').on('input', enforceDecimalInput)
     
@@ -137,11 +139,6 @@ ready = ->
       # Set the main receipt total value
       $('.new_receipt div.receipt-total input').val(final_total)
       
-      console.log "--- Receipt Total Calculation (REFINED) ---"
-      console.log "Total Cents Sum:", total_amount_cents
-      console.log "Final Receipt Total:", final_total
-      console.log "-----------------------------------------"
-      
       # Trigger balance calculation immediately after total updates
       $('.new_receipt div.receipt-amount-received input').trigger('focusout')
       return
@@ -157,12 +154,6 @@ ready = ->
       # Use the precise helper function
       $total.value = calculatePreciseTotal(qty, unit_price)
       
-      console.log "--- Row Total Calculation ---"
-      console.log "Qty:", qty
-      console.log "Unit Price:", unit_price
-      console.log "Calculated Total:", $total.value
-      console.log "---------------------------"
-
       # Trigger overall receipt total update
       recalculateReceiptTotal()
       return
@@ -290,12 +281,6 @@ ready = ->
 
       # Use the precise helper function for subtraction
       balance.value = calculatePreciseDifference(total, received)
-      
-      console.log "--- Balance Calculation ---"
-      console.log "Total:", total
-      console.log "Received:", received
-      console.log "Balance:", balance.value
-      console.log "-------------------------"
       
       return
     )
