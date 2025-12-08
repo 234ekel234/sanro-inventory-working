@@ -2,26 +2,22 @@
 # All this logic will automatically be available in application.js.
 # You can use CoffeeScript in this file: http://coffeescript.org/
 
-# Helper function to perform precise multiplication for currency.
-# It converts floats to cents (x100) before multiplying to avoid floating point errors.
-# Result is returned as a rounded number (in cents) which must be converted back to dollars/decimal.
+# Helper function to perform precise multiplication for currency (REVISED).
+# It relies on multiplying the raw product by 100, rounding to the nearest integer (cent),
+# and then dividing back by 100. This is the standard solution for JS floating point math.
 calculatePreciseTotal = (qty, unit_price) ->
   # Convert inputs to numbers first, handle potential nulls/empties with 0
   qty = parseFloat(qty) || 0
   unit_price = parseFloat(unit_price) || 0
 
-  # Convert to cents, multiply, and round the result to the nearest cent
-  # We use Math.round(x * 100) to ensure the conversion to cents is accurate
-  qty_cents = Math.round(qty * 100)
-  price_cents = Math.round(unit_price * 100)
+  # 1. Calculate the raw product (subject to float errors)
+  raw_product = qty * unit_price
+  
+  # 2. Convert the raw product to cents and round it to the nearest integer (cent).
+  # This corrects the floating point error.
+  total_cents = Math.round(raw_product * 100)
 
-  # Perform the multiplication in cents, then divide by 100 to get the result in cents.
-  # Example: 1.5 * 2.0 = 3.00. (150 * 200) / 100 = 300 (cents)
-  # NOTE: The division by 100 is key because we multiplied both factors by 100.
-  # We round the final result (in cents) to prevent intermediate floating point issues.
-  total_cents = Math.round((qty_cents * price_cents) / 100)
-
-  # Return the value as a string formatted to two decimal places
+  # 3. Return the value as a string formatted to two decimal places
   return (total_cents / 100).toFixed(2)
 
 # Helper function to perform precise subtraction (a - b)
@@ -99,6 +95,12 @@ ready = ->
       # Use the precise helper function
       $total.value = calculatePreciseTotal(qty, unit_price)
       
+      console.log "--- Row Total Calculation ---"
+      console.log "Qty:", qty
+      console.log "Unit Price:", unit_price
+      console.log "Calculated Total:", $total.value
+      console.log "---------------------------"
+
       # Trigger overall receipt total update
       $('.new_receipt div.receipt-total input').trigger('change')
       return
@@ -227,6 +229,12 @@ ready = ->
 
       # Convert the final total cents back to a decimal string
       this.value = (total_amount_cents / 100).toFixed(2)
+      
+      console.log "--- Receipt Total Calculation ---"
+      console.log "Total Cents Sum:", total_amount_cents
+      console.log "Final Receipt Total:", this.value
+      console.log "-------------------------------"
+      
       $('.new_receipt div.receipt-amount-received input').trigger('focusout')
       return
     )
@@ -239,6 +247,13 @@ ready = ->
 
       # Use the precise helper function for subtraction
       balance.value = calculatePreciseDifference(total, received)
+      
+      console.log "--- Balance Calculation ---"
+      console.log "Total:", total
+      console.log "Received:", received
+      console.log "Balance:", balance.value
+      console.log "-------------------------"
+      
       return
     )
 
