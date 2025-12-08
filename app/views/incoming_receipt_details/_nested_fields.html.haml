@@ -13,7 +13,7 @@
         %td.width-10
           .field.form-group.qty
             = f.label :qty
-            = f.number_field :qty, min: 0, class: 'form-control', step: 0.01, disabled: f.object.id ? true : false
+            = f.text_field :qty, min: 0, class: 'form-control', step: 0.01, disabled: f.object.id ? true : false
         %td.width-10
           .field.form-group
             = f.label :unit
@@ -21,11 +21,11 @@
         %td.width-15
           .field.form-group.unit-price.price
             = f.label :unit_price
-            = f.number_field :unit_price, class: 'form-control', step: 0.01
+            = f.text_field :unit_price, class: 'form-control', step: 0.01
         %td
           .field.form-group.total
             = f.label :total
-            = f.number_field :total, class: 'form-control', step: 0.01
+            = f.text_field :total, class: 'form-control', step: 0.01
         %td
           .field.form-group
             = f.hidden_field :id
