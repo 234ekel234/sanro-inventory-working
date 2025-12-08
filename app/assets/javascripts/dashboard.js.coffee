@@ -1,266 +1,171 @@
-# Place all the behaviors and hooks related to the matching controller here.
-# All this logic will automatically be available in application.js.
-# You can use CoffeeScript in this file: http://coffeescript.org/
-
 ready  = ->
-  if !$.fn.dataTable.isDataTable( ".inventory" )
-    if $('.inventory').length > 0
-      $('.inventory').DataTable
-          sPaginationType: 'full_numbers'
-          bJQueryUI: true
-          'order': [[0, 'desc']]
-          lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "All"]]
-          pageLength: 25
-          pagingType: 'simple_numbers'
-          dom: '<"top"lf>rt<"bottom"ip><"clear">'
+  # -------------------------------
+  # DataTables initialization
+  # -------------------------------
+  if !$.fn.dataTable.isDataTable(".inventory") and $('.inventory').length > 0
+    $('.inventory').DataTable
+      sPaginationType: 'full_numbers'
+      bJQueryUI: true
+      order: [[0, 'desc']]
+      lengthMenu: [[10, 25, 50, -1], [10, 25, 50, "All"]]
+      pageLength: 25
+      pagingType: 'simple_numbers'
+      dom: '<"top"lf>rt<"bottom"ip><"clear">'
 
-  if !$.fn.dataTable.isDataTable( ".receipt" )
-    if $('.receipt').length > 0
-      $('.receipt').DataTable
-          sPaginationType: 'full_numbers'
-          bJQueryUI: true
-          'order': [[0, 'asc']]
-          lengthMenu: [[10, 25, -1], [10, 25, "All"]]
-          pageLength: 10
-        pagingType: 'simple_numbers'
-        dom: '<"top"lf>rt<"bottom"ip><"clear">'
+  if !$.fn.dataTable.isDataTable(".receipt") and $('.receipt').length > 0
+    $('.receipt').DataTable
+      sPaginationType: 'full_numbers'
+      bJQueryUI: true
+      order: [[0, 'asc']]
+      lengthMenu: [[10, 25, -1], [10, 25, "All"]]
+      pageLength: 10
+      pagingType: 'simple_numbers'
+      dom: '<"top"lf>rt<"bottom"ip><"clear">'
 
-  if !$.fn.dataTable.isDataTable( ".reports" )
-    if $('.reports').length > 0
-      $report = $('.reports').DataTable
-          sPaginationType: 'full_numbers'
-          bJQueryUI: true
-          'order': [[0, 'asc']]
-          paging: false
-          searching: false
-      new $.fn.dataTable.FixedHeader($report, {bottom: true})
+  if !$.fn.dataTable.isDataTable(".reports") and $('.reports').length > 0
+    $report = $('.reports').DataTable
+      sPaginationType: 'full_numbers'
+      bJQueryUI: true
+      order: [[0, 'asc']]
+      paging: false
+      searching: false
+    new $.fn.dataTable.FixedHeader($report, {bottom: true})
 
-  ### user input must be uppercase ###
-  $('input').on('keyup', (e) ->
+  # -------------------------------
+  # Uppercase text input (excluding decimals)
+  # -------------------------------
+  $(document).on 'keyup', 'input:not(.decimal-field)', (e) ->
     this.value = this.value.toUpperCase()
-    return
-  )
 
+  # -------------------------------
+  # Format decimal fields on blur
+  # -------------------------------
+  $(document).on 'blur', '.decimal-field', (e) ->
+    val = parseFloat(this.value) || 0
+    this.value = val.toFixed(2)
+
+  # -------------------------------
+  # Datepickers
+  # -------------------------------
   if window.location.pathname.match(/.*generate.*bill.*/)
-    ### datepicker - add/update generate bill form ###
-    $('.bill_date').datepicker(
-      dateFormat: "dd/mm/yy"
-    )
+    $('.bill_date').datepicker dateFormat: "dd/mm/yy"
 
-  ### receipt form elements start ###
-  if (window.location.pathname.match(/.*receipt.*(new|edit).*/))
-    ### datepicker - add/update receipt form ###
-    $('.receipt_date_issued').datepicker(
-       dateFormat: "dd/mm/yy"
-    )
+  if window.location.pathname.match(/.*receipt.*(new|edit).*/)
+    $('.receipt_date_issued').datepicker dateFormat: "dd/mm/yy"
 
-    ### helper: recalc row total ###
-    recalcRowTotal = ->
-      $row = $(this).closest('tr')
-      qty = parseFloat($row.find('div.qty input').val()) || 0
-      unit_price = parseFloat($row.find('div.price input').val()) || 0
-      $row.find('div.total input').val((qty * unit_price).toFixed(2))
-      $('.new_receipt div.receipt-total input').trigger('change')
+    # -------------------------------
+    # Cocoon nested form: before-insert
+    # -------------------------------
+    $('.new_receipt').on 'cocoon:before-insert', (e, detail) ->
 
-    ### cocoon nested forms ###
-    $('.new_receipt').on('cocoon:before-insert', (e, detail) ->
+      # Uppercase for non-decimal inputs
+      $(detail).find('input:not(.decimal-field)').on 'keyup', ->
+        this.value = this.value.toUpperCase()
 
-      $qty_input = $(detail.find('div.qty input'))
-      $unit_price_input = $(detail.find('div.price input'))
+      # -------------------------------
+      # Quantity input focusin: fetch stock
+      # -------------------------------
+      $(detail).find('div.qty input, div.price input, div.total input').addClass('decimal-field')
 
-      # qty focusin: fetch stock
-      $qty_input.on('focusin', ->
-        tag_input = $(detail).find('input.hidden-item-id').val()
+      $(detail).find('div.qty input').on 'focusin', ->
+        item_id = $(this).closest('tr').find('input.hidden-item-id').val()
         $.ajax
-          url: '/items/'+tag_input+'/getStock'
+          url: '/items/' + item_id + '/getStock'
           success: (result) ->
-            $(detail.find('div.qty input')).val(result)
-      )
+            $(this).val(result)
 
-      # calculate total on blur safely
-      $qty_input.on 'blur', recalcRowTotal
-      $unit_price_input.on 'blur', recalcRowTotal
+      # -------------------------------
+      # Quantity and unit_price focusout: calculate total
+      # -------------------------------
+      $(detail).find('div.qty input, div.price input').on 'focusout', ->
+        $row = $(this).closest('tr')
+        qty = parseFloat($row.find('div.qty input').val()) || 0
+        unit_price = parseFloat($row.find('div.price input').val()) || 0
+        $row.find('div.total input').val((qty * unit_price).toFixed(2))
+        $('.new_receipt div.receipt-total input').trigger('change')
 
-      ### user input must be uppercase ###
-      $(detail.find('input')).each( (index, element) ->
-        $(element).on('keyup', (e) ->
-          this.value = this.value.toUpperCase()
-          return
-        )
-      )
-
-      ### typeahead js ###
+      # -------------------------------
+      # Typeahead for description and part_number
+      # -------------------------------
       $.getJSON '/items/descriptions', (data) ->
-        tag_input = $(detail.find('div.description input'))
-        tag_input.typeahead
-          placeholder: tag_input.attr('placeholder')
+        $(detail).find('div.description input').typeahead
+          placeholder: $(this).attr('placeholder')
           displayKey: 'value'
           highlight: true
           hint: true
           source: data
           allowNew: true
           items: 25
-        return
 
-      $part_number = $(detail.find('div.part-number input'))
-      $part_number.on('focusin', ->
-        description = $(detail.find('div.description input')).val()
-        $.getJSON '/items/part_numbers', {description:description}, (data) ->
-          $part_number.typeahead
-            placeholder: $part_number.attr('placeholder')
+      $(detail).find('div.part-number input').on 'focusin', ->
+        description = $(this).closest('tr').find('div.description input').val()
+        $.getJSON '/items/part_numbers', {description: description}, (data) ->
+          $(this).typeahead
+            placeholder: $(this).attr('placeholder')
             displayKey: 'value'
             highlight: true
             hint: true
             source: data
             allowNew: true
             items: 25
-          return
-        return
-      )
 
       $.getJSON '/items/ajaxList', (data) ->
-        tag_input = $(detail.find('.select-inventory-item'))
-        tag_input.typeahead
-          placeholder: tag_input.attr('placeholder')
+        $(detail).find('.select-inventory-item').typeahead
+          placeholder: $(this).attr('placeholder')
           displayKey: 'value'
           highlight: true
           hint: true
           source: data
           items: 25
+          allowNew: false
           updater: (item) ->
             el_item = this.$element.parent().find('.hidden-item-id')[0]
             el_item.value = item.split('|')[1]
             $.ajax
-              url: '/items/'+item.split('|')[1]+'/getUnitPrice'
+              url: '/items/' + item.split('|')[1] + '/getUnitPrice'
               success: (result) ->
-                $(detail.find('span.unit-price')).text(result.unit_price)
-            return item.split('|')[0]
-          allowNew: false
-        return
-      return
-    )
+                $(detail).find('span.unit-price').text(result.unit_price)
+            item.split('|')[0]
 
-    # Attach blur handlers for existing nested fields
-    $(document).on 'blur', '.new_receipt .nested-fields div.qty input, .new_receipt .nested-fields div.price input', recalcRowTotal
+    # -------------------------------
+    # Update total on qty/price change
+    # -------------------------------
+    $(document).on 'change', '.new_receipt .nested-fields div.qty input, .new_receipt .nested-fields div.price input', (e) ->
+      $row = $(this).closest('tr')
+      qty = parseFloat($row.find('div.qty input').val()) || 0
+      unit_price = parseFloat($row.find('div.price input').val()) || 0
+      $row.find('div.total input').val((qty * unit_price).toFixed(2))
+      $('.new_receipt div.receipt-total input').trigger('change')
 
-    ### calculate receipt total ###
-    $('.new_receipt div.receipt-total input').on('change', ->
-      receipt_details = $('.new_receipt .receipt-detail table')
-      total_amount = 0
-      receipt_details.each (i, table) ->
-        total_amount += parseFloat($(table).find('div.total input').val()) || 0
-      $(this).val(total_amount.toFixed(2))
+    # -------------------------------
+    # Calculate receipt total
+    # -------------------------------
+    $(document).on 'change', '.new_receipt div.receipt-total input', ->
+      total = 0
+      $('.new_receipt .receipt-detail table').each (i, table) ->
+        total += parseFloat($(table).find('div.total input').val()) || 0
+      $(this).val(total.toFixed(2))
       $('.new_receipt div.receipt-amount-received input').trigger('focusout')
-      return
-    )
 
-    ### calculate balance ###
-    $('.new_receipt div.receipt-amount-received input').on('focusout', ->
+    # -------------------------------
+    # Calculate balance
+    # -------------------------------
+    $(document).on 'focusout', '.new_receipt div.receipt-amount-received input', ->
       total = parseFloat($('.new_receipt div.receipt-total input').val()) || 0
       received = parseFloat(this.value) || 0
       $('.new_receipt div.receipt-balance input').val((total - received).toFixed(2))
-      return
-    )
 
-    ### typeahead js for existing nested fields ###
-    $.getJSON '/items/descriptions', (data) ->
-      tag_input = $('.new_receipt .nested-fields div.description input')
-      tag_input.typeahead
-        placeholder: tag_input.attr('placeholder')
-        displayKey: 'value'
-        highlight: true
-        hint: true
-        source: data
-        allowNew: true
-        items: 25
-      return
+    # -------------------------------
+    # Cocoon remove: reset total
+    # -------------------------------
+    $('.new_receipt').on 'cocoon:before-remove', (e, detail) ->
+      $(detail).find('div.total input').val(0)
+      $('.new_receipt div.receipt-total input').trigger('change')
 
-    $part_number = $('.new_receipt .nested-fields div.part-number input')
-    $part_number.on('focusin', ->
-      description = $('.new_receipt .nested-fields div.description input').val()
-      $.getJSON '/items/part_numbers', {description:description}, (data) ->
-        $part_number.typeahead
-          placeholder: $part_number.attr('placeholder')
-          displayKey: 'value'
-          highlight: true
-          hint: true
-          source: data
-          allowNew: true
-          items: 25
-        return
-      return
-    )
-
-    $.getJSON '/items/ajaxList', (data) ->
-      tag_input = $('.new_receipt .nested-fields .select-inventory-item')
-      tag_input.typeahead
-        placeholder: tag_input.attr('placeholder')
-        displayKey: 'value'
-        highlight: true
-        hint: true
-        source: data
-        items: 25
-        updater: (item) ->
-          el_item = this.$element.parent().find('.hidden-item-id')[0]
-          el_item.value = item.split(' - ')[2]
-          return item
-        allowNew: false
-      return
-
-  $('.new_receipt').on('cocoon:before-remove', (e, detail) ->
-    $(detail).find('div.total input').val(0)
-    $('.new_receipt div.receipt-total input').trigger('change')
-    return
-  )
-  ### receipt form elements end ###
-
-  ### report form elements start ###
-  $('.date-month').addClass('hide').hide()
-  $('.date-year').addClass('hide').hide()
-  $('.report-period').addClass('hide').hide()
-  $('.report-type select').on('change', ->
-    # reset options
-    $('.date-month').removeClass('hide').show()
-    $('.date-year').addClass('hide').hide()
-    $('.date-quarter').addClass('hide').hide()
-    $('.report-period').removeClass('hide').show()
-    $('.report-period select').prop('selectedIndex', 0)
-
-    if ($(this).val() == 'Stocks')
-      $('.date-month').addClass('hide').hide()
-      $('.report-period').addClass('hide').hide()
-  )
-
-  $('.report-period').on('change', ->
-    # reset options
-    $('.date-month').addClass('hide').hide()
-    $('.date-quarter').addClass('hide').hide()
-    $('.date-year').removeClass('hide').show()
-
-    if ($(this).find('select').val()=='Monthly')
-      $('.date-month').removeClass('hide').show()
-      $('.date-year').addClass('hide').hide()
-    else if ($(this).find('select').val()=='Quarterly')
-      $('.date-quarter').removeClass('hide').show()
-  )
-  ### report form elements end ###
-
-  ### merge item start ###
-  $('#item_merge').on('click', ->
-    items = []
-    $('input#merge:checked').each (index)->
-      items.push(this.value)
-    console.log('TODO ' + items);
-    window.location = "/items/merging?items=" + items;
-  )
-  ### merge item end ###
-
-  return
-
+# -------------------------------
+# Document ready / Turbolinks support
+# -------------------------------
 $(document).ready(ready)
-$(document).on('page:change', ready)
-$(document).on 'page:fetch', ->
-  $('main').fadeOut 'slow'
-
-$(document).on 'page:restore', ->
-  $('main').fadeIn 'slow'
+$(document).on 'page:change', ready
+$(document).on 'page:fetch', -> $('main').fadeOut 'slow'
+$(document).on 'page:restore', -> $('main').fadeIn 'slow'
