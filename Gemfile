@@ -37,13 +37,13 @@ gem 'bcrypt', '~> 3.1.7'
 
 # Use debugger
 # gem 'debugger', group: [:development, :test]
-
+gem 'nokogiri', '~> 1.8'
 gem 'pg'
 gem 'haml-rails'
 gem 'pundit'
-gem 'jquery-datatables-rails', '~> 3.1.1', github: 'rweng/jquery-datatables-rails'
+gem 'jquery-datatables-rails', '~> 3.1.1'
 gem 'will_paginate'
-gem 'bootstrap-sass', '~> 3.2.0'
+gem 'bootstrap-sass', '~> 3.2.0.4'
 gem 'devise'
 gem 'composite_primary_keys', '=7.0.10'
 gem 'cocoon'
