@@ -36,10 +36,11 @@ ready  = ->
       new $.fn.dataTable.FixedHeader($report, {bottom: true})
 
   ### user input must be uppercase ###
-  $('input').on('keyup', (e) ->
+  $('input').not('.decimal-field').on('keyup', (e) ->
     this.value = this.value.toUpperCase()
     return
   )
+
 
   if window.location.pathname.match(/.*generate.*bill.*/)
     ### datepicker - add/update generate bill form ###
@@ -91,12 +92,13 @@ ready  = ->
       )
 
       ### user input must be uppercase ###
-      $(detail.find('input')).each( (index, element) ->
+      $(detail.find('input')).not('.decimal-field').each( (index, element) ->
         $(element).on('keyup', (e) ->
           this.value = this.value.toUpperCase()
           return
         )
       )
+
 
       ### typeahead js ###
       $.getJSON '/items/descriptions', (data) ->
