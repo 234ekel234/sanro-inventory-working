@@ -54,15 +54,10 @@ class ItemsController < ApplicationController
     end
   end
 
-  def ajaxList
-    ajaxList = []
-    Item.all.each do |item|
-      ajaxList << "#{item.description} #{item.part_number} |#{item.id}"
-    end
-    respond_to do |format|
-      format.html
-      format.json{ render json: ajaxList }
-    end
+  def ajax_list
+    items = Item.pluck(:description, :part_number, :id)
+    ajax_list = items.map { |desc, part, id| "#{desc} #{part} |#{id}" }
+    render json: ajax_list
   end
 
   def getStock
