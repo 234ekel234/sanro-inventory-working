@@ -54,10 +54,10 @@ class ItemsController < ApplicationController
     end
   end
 
-  def ajax_list
+  def ajaxList
     items = Item.pluck(:description, :part_number, :id)
-    ajax_list = items.map { |desc, part, id| "#{desc} #{part} |#{id}" }
-    render json: ajax_list
+    ajaxList = items.map { |desc, part, id| "#{desc} #{part} |#{id}" }
+    render json: ajaxList
   end
 
   def getStock
